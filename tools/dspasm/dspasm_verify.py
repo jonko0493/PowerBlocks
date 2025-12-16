@@ -1,11 +1,10 @@
 """
-DSP Microcode Assembler Client Interface
+DSP Microcode Assembler Verification Tool
 
-Provides a standard command line interface
-on-top of the assembler.
+Used to verify the output of the tool after modification.
 
 Author: Samuel Fitzsimons (rainbain)
-File: dspasm_cli.py
+File: dspasm_verify.py
 Date: 2025
 """
 
@@ -18,17 +17,46 @@ from dspasm.preprocessor import Preprocessor
 from dspasm.parser import Parser
 from dspasm.utils import dump_tokens_to_file
 
+def verify(source, binary, symbols):
+    if len(source) != len(binary):
+        print(f"Verification Error. Source binary has size {len(source)} bytes, while the one were verifying against is {len(binary)}")
+        return False
+
+    passed = True
+    
+    for i in range(len(source)):
+        if source[i] != binary[i]:
+            print(f"Mismatch found at PC {hex(i)}, expected {hex(binary[i])}, got {hex(source[i])}")
+            
+            token = None
+            for j in range(1, len(symbols)):
+                pc, symbol = symbols[j]
+
+                if pc > i:
+                    _, token = symbols[j-1]
+                    break
+            
+            if token:
+                print(f"  {token}")
+
+            passed = False
+
+    return passed
+
 def main():
-    parser = argparse.ArgumentParser(description="PowerBlocks SDK Audio DSP Microcode Assembler")
-    parser.add_argument("input", type=Path, help="Input .s assembly source file")
-    parser.add_argument("-o", "--output", type=Path, help="Output binary file", default="out.bin")
+    parser = argparse.ArgumentParser(description="PowerBlocks DSP Microcode Binary Verifier")
+    parser.add_argument("source", type=Path)
+    parser.add_argument("binary", type=Path)
     parser.add_argument("-t", "--tokens", type=Path, help="Dump tokens after preprocessor to file for debugging.")
-    parser.add_argument("-bt", "--backtrace", help="Enable python backtrace on errors.", action="store_true")
+    parser.add_argument("-bt", "--backtrace", action="store_true")
     
     args = parser.parse_args()
 
-    input_source = args.input
-    output_binary = args.output
+    input_source = args.source
+
+    # Read binary we want to verify
+    with open(args.binary, mode='rb') as file:
+        input_binary = file.read()
 
     try:
         preprocessor = Preprocessor()
@@ -52,7 +80,7 @@ def main():
         print(f"{os.path.basename(input_source)}: Preprocessor Failed")
         print(f"\t{e}")
         sys.exit(1)
-
+    
     # Dump them if asked
     if args.tokens:
         dump_tokens_to_file(tokens, args.tokens)
@@ -71,13 +99,8 @@ def main():
         sys.exit(1)
     
     try:
-
         # Create bytecode
-        bytecode, _ = program.generate_bytecode()
-
-        # Write to file
-        with open(output_binary, "wb") as f:
-            f.write(bytecode)
+        bytecode, symbol_listing = program.generate_bytecode()
     except Exception as e:
         # If backtrace, send this off to the top
         if args.backtrace:
@@ -87,6 +110,12 @@ def main():
         print(f"\t{e}")
         sys.exit(1)
 
+    result = verify(bytecode, input_binary, symbol_listing)
+
+    if result:
+        print("Verification Passed")
+    else:
+        print("Verification Failed")
 
 if __name__ == "__main__":
     main()

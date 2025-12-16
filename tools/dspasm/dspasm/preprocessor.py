@@ -103,8 +103,8 @@ class Preprocessor:
         values = []
 
         # Gather arguments if the macro has no whitespace between this "value" and the actual value
-        if value.type == "LPAREN" and not self.after_whitespace():
-            arguments = self.consumer.consume_list("RPAREN")
+        if value.type == "LPAREN" and not self.consumer.after_whitespace():
+            arguments = self.consumer.consume_list(["RPAREN"])
 
             # Grab the actual value now
             value = self.consumer.consume()
@@ -112,7 +112,7 @@ class Preprocessor:
         # If there is something in value
         if value.type != "NEWLINE":
             # It must be after a white space
-            if not self.after_whitespace():
+            if not self.consumer.after_whitespace():
                 assembly_error(value, "Expected white space")
             
             # Collect values
@@ -293,7 +293,7 @@ class Preprocessor:
             # Make sure it begins with an open parentheses
             self.consumer.consume("LPAREN", "'('")
 
-            arguments = self.consumer.consume_list("RPAREN")
+            arguments = self.consumer.consume_list(["RPAREN"])
         
         flattened = macro.flatten(arguments)
 

@@ -348,7 +348,7 @@ class TokenConsumer:
         return next.col != prev.col + len(prev.value)
     
     # Starting after the `(` gather a comma separated list of list of tokens.
-    def consume_list(self, end_value):
+    def consume_list(self, end_values):
         arguments = []
 
         # If a list is inside a list, we need to know that
@@ -367,13 +367,13 @@ class TokenConsumer:
             if nests > 0:
                 field.append(value)
 
-                if value.type == end_value:
+                if value.type in end_values:
                     nests -= 1
                 
                 continue
 
             # End of arguments
-            if value.type == end_value:
+            if value.type in end_values:
                 # If were multiple arguments in, and yet field is empty, that means
                 # there is a rouge coma
                 if len(arguments) > 0 and len(field) == 0:

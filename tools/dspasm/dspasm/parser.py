@@ -12,18 +12,22 @@ Date: 2025
 
 from .utils import TokenConsumer, assembly_error, evaluate_expression, name_token
 from .lexer import Token
+from .isa import OPCODE_LISTING, EXT_OPCODE_LISTING
 
 class DataDirective:
     def __init__(self, program, word_size, endian="big"):
         self.program = program
         self.word_size = word_size
         self.endian = endian
+        self.error_token = None
 
         self.values = []
     
-    def consume(self, consumer: TokenConsumer):
+    def consume(self, token, consumer: TokenConsumer):
+        self.error_token = token
+
         # Consume a coma separated list.
-        self.values = consumer.consume_list("NEWLINE")
+        self.values = consumer.consume_list(["NEWLINE"])
     
     def serialize(self, _):
         output = bytearray()
@@ -54,8 +58,11 @@ class StringDirective:
     def __init__(self, program, null_terminator):
         self.program = program
         self.null_terminator = null_terminator
+        self.error_token = None
     
-    def consume(self, consumer: TokenConsumer):
+    def consume(self, token, consumer: TokenConsumer):
+        self.error_token = token
+
         self.string = consumer.consume("STRING", "string").value[1:-1]
     
     def serialize(self, _):
@@ -72,9 +79,12 @@ class StringDirective:
 class SpaceDirective:
     def __init__(self, program):
         self.program = program
+        self.error_token = None
     
-    def consume(self, consumer: TokenConsumer):
+    def consume(self, token, consumer: TokenConsumer):
         expression = consumer.consume_line()
+
+        self.error_token = token
 
         # Check for a symbol in the length expression, we cant do that
         for token in expression:
@@ -94,6 +104,7 @@ class SpaceDirective:
 class Label:
     def __init__(self, name):
         self.name = name
+        self.error_token = None
     
     def serialize(self, _):
         return bytearray()
@@ -104,9 +115,12 @@ class Label:
 class AlignmentDirective:
     def __init__(self, program):
         self.program = program
+        self.error_token = None
     
-    def consume(self, consumer: TokenConsumer):
+    def consume(self, token, consumer: TokenConsumer):
         expression = consumer.consume_line()
+
+        self.error_token = token
 
         # Check for a symbol in the length expression, we cant do that
         for token in expression:
@@ -126,9 +140,12 @@ class AlignmentDirective:
 class OrgDirective:
     def __init__(self, program):
         self.program = program
+        self.error_token = None
     
-    def consume(self, consumer: TokenConsumer):
+    def consume(self, token, consumer: TokenConsumer):
         expression = consumer.consume_line()
+
+        self.error_token = token
 
         # Check for a symbol in the length expression, we cant do that
         for token in expression:
@@ -208,6 +225,10 @@ class Program:
         # Figure out where each symbol is
         self.evaluate_symbols()
 
+        # Symbol listing.
+        # Used for verification testing, maps each PC to a statement's error token
+        symbol_listing = []
+
         pc = 0
         for stmt in self.statements:
             if isinstance(stmt, OrgDirective):
@@ -216,9 +237,12 @@ class Program:
             data = stmt.serialize(pc)
 
             self.write(pc, data)
+
+            symbol_listing.append((pc, stmt.error_token))
+
             pc += stmt.length(pc)
         
-        return self.data
+        return self.data, symbol_listing
 
 class Parser:
     def __init__(self):
@@ -241,6 +265,11 @@ class Parser:
 
             if token.type == "ASMDIRECTIVE":
                 self.asm_directive(token)
+            
+                # Bug Fix, instruction check must come before label check, or the extended instructions
+                # Can look like a label.
+            elif token.type == "IDENT" and token.value.upper().split("'")[0] in OPCODE_LISTING:
+                self.opcode(token)
             elif token.type == "IDENT" and self.consumer.peak(type="COLON"):
                 self.label(token)
             else:
@@ -253,8 +282,8 @@ class Parser:
 
         self.program.push(label)
 
-        # Consume rest of line
-        self.consumer.consume_line()
+        # Consume colon
+        self.consumer.consume("COLON", "colon")
     
     def asm_directive(self, token):
         # Get the directive
@@ -282,6 +311,28 @@ class Parser:
         else:
             assembly_error(token, f"Unknown directive \"{name}\"")
         
-        directive.consume(self.consumer)
+        directive.consume(token, self.consumer)
 
         self.program.push(directive)
+    
+    def opcode(self, token):
+        parts = token.value.upper().split("'")
+
+        name = parts[0]
+        op = OPCODE_LISTING[name]
+
+        extended = len(parts) > 1
+
+        opcode = op.instantiate(self.program, token, self.consumer, False)
+
+        if extended:
+            ext_name = parts[1]
+            if not ext_name in EXT_OPCODE_LISTING:
+                assembly_error(token, f"Unknown extended opcode {ext_name}")
+            
+            ext_op = EXT_OPCODE_LISTING[ext_name]
+            ext_opcode = ext_op.instantiate(self.program, token, self.consumer, True)
+            
+            opcode.set_extension(ext_opcode)
+
+        self.program.push(opcode)
