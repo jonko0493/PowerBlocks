@@ -8,7 +8,7 @@
  * date 2025
  */
 
-#include "cpu.S"
+#include "cpu.h"
 
     NOP
 

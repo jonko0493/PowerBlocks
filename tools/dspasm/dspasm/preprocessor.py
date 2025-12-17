@@ -63,7 +63,9 @@ class Macro:
         return output
 
 class Preprocessor:
-    def __init__(self):
+    def __init__(self, include_directories = []):
+        self.include_directories = include_directories
+
         self.macros = {}
 
         # Track includes for output
@@ -353,6 +355,15 @@ class Preprocessor:
 
                 # Strip quotes and resolve path relative to current file
                 include_path = os.path.join(os.path.dirname(path), next_t.value.strip('"'))
+
+                # If it does not exist, check includes
+                if not os.path.exists(include_path):
+                    for directory in self.include_directories:
+                        include_path = os.path.join(directory, next_t.value.strip('"'))
+                        
+                        if os.path.exists(include_path):
+                            break
+
 
                 # Recursively resolve included file
                 included_tokens = self.recursive_include(include_path)
