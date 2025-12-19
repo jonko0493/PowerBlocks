@@ -118,7 +118,7 @@ extern system_argv_t system_argv;
  *  When the system starts, the main() will be a FreeRTOS task
  *  of this stack size.
  */
-#define SYSTEM_MAIN_STACK_SIZE (1024*1024*4) // 4 MB
+#define SYSTEM_MAIN_STACK_SIZE (1024*16) // 16 KB
 
  /** @def SYSTEM_GET_MSR
  *  @brief Gets the value of the MSR register
