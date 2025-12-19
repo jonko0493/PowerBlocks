@@ -1,8 +1,8 @@
 /**
  * @file cpu.S
- * @brief Microcode Defines
+ * @brief Microcode Defines For CPU
  *
- * Various defines for the microcode.
+ * Various defines for the microcode of the CPU.
  *
  * @author Samuel Fitzsimons (rainbain)
  * @date 2025

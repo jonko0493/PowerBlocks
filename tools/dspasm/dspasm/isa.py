@@ -232,10 +232,10 @@ class Opcode:
         field = None
         if type in ['d', 's', 't', 'r']:
             field = RegisterField(type, bits, self.pop_register_listing())
-        elif type in ['i', 'c']:
+        elif type in ['i', 'c', 'm', 'h']:
             field = ImmediateField(type, bits)
-        elif type in ['a', 'm']:
-            field = ImmediateField(type, bits, True)
+        elif type in ['a']:
+            field = ImmediateField(type, bits, is_address=True)
         elif type == "x":
             # These get special treatment, as their own unique field.
             self.extended_opcode = ExtendedOpcodeField(bits)
@@ -306,6 +306,8 @@ REGISTERS = REGISTER_ADDRESS + REGISTER_INDEXING + [
     ["$13", "$r0D", "$st1"],
     ["$14", "$r0E", "$st2"],
     ["$15", "$r0F", "$st3"],
+
+] + REGISTER_ACCUMULATOR_HIGH_1 + [
     
     ["$18", "$r12", "$config"],
     ["$19", "$r13", "$sr"],
@@ -393,7 +395,7 @@ add_opcode(Opcode("LSL",    "0001 010r 00ii iiii", [REGISTER_FULL_ACCUMULATOR], 
 add_opcode(Opcode("LSR",    "0001 010r 01ii iiii", [REGISTER_FULL_ACCUMULATOR], [0, 1]))
 add_opcode(Opcode("ASL",    "0001 010r 10ii iiii", [REGISTER_FULL_ACCUMULATOR], [0, 1]))
 add_opcode(Opcode("ASR",    "0001 010r 11ii iiii", [REGISTER_FULL_ACCUMULATOR], [0, 1]))
-add_opcode(Opcode("SI",     "0001 0110 mmmm mmmm iiii iiii iiii iiii", [], [0, 1]))
+add_opcode(Opcode("SI",     "0001 0110 hhhh hhhh iiii iiii iiii iiii", [], [0, 1]))
 add_opcode(Opcode("JRCC",   "0001 0111 rrr0 cccc", [REGISTERS], [0, 1]))
 add_opcode(Opcode("CALLRCC","0001 0111 rrr1 cccc", [REGISTERS], [0, 1]))
 
@@ -407,9 +409,9 @@ add_opcode(Opcode("SRRI",   "0001 1011 0dds ssss", [REGISTER_ADDRESS, REGISTERS]
 add_opcode(Opcode("SRRN",   "0001 1011 1dds ssss", [REGISTER_ADDRESS, REGISTERS], [0, 1]))
 add_opcode(Opcode("MRR",    "0001 11dd ddds ssss", [REGISTERS, REGISTERS], [0, 1]))
 
-add_opcode(Opcode("LRS",    "0010 0ddd mmmm mmmm", [REGISTERS_ACCUMULATOR], [0, 1]))
-add_opcode(Opcode("SRSH",   "0010 100s mmmm mmmm", [REGISTER_ACCUMULATOR_HIGH_1], [1, 0]))
-add_opcode(Opcode("SRS",    "0010 11ss mmmm mmmm", [REGISTER_ACCUMULATOR_LOW  + REGISTER_ACCUMULATOR_MID], [1, 0]))
+add_opcode(Opcode("LRS",    "0010 0ddd hhhh hhhh", [REGISTERS_ACCUMULATOR], [0, 1]))
+add_opcode(Opcode("SRSH",   "0010 100s hhhh hhhh", [REGISTER_ACCUMULATOR_HIGH_1], [1, 0]))
+add_opcode(Opcode("SRS",    "0010 11ss hhhh hhhh", [REGISTER_ACCUMULATOR_LOW  + REGISTER_ACCUMULATOR_MID], [1, 0]))
 
 add_opcode(Opcode("XORR",   "0011 00sd 0xxx xxxx", [REGISTER_ACCUMULATOR_HIGH, REGISTER_ACCUMULATOR_MID], [1, 0]))
 add_opcode(Opcode("ANDR",   "0011 01sd 0xxx xxxx", [REGISTER_ACCUMULATOR_HIGH, REGISTER_ACCUMULATOR_MID], [1, 0]))
