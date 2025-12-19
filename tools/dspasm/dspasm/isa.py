@@ -524,3 +524,11 @@ add_ext_opcode(Opcode("LDM",     "11dr 10ss", [REGISTER_PARTS_AX0, REGISTER_PART
 add_ext_opcode(Opcode("LDAXM",   "11sr 1011", [REGISTER_ADDRESS, REGISTER_SECONDARY_ACCUMULATOR], [1, 0]))
 add_ext_opcode(Opcode("LDNM",    "11dr 11ss", [REGISTER_PARTS_AX0, REGISTER_PARTS_AX1, REGISTER_ADDRESS], [0, 1, 2]))
 add_ext_opcode(Opcode("LDAXNM",  "11sr 1111", [REGISTER_ADDRESS, REGISTER_SECONDARY_ACCUMULATOR], [1, 0]))
+
+# Instruction Alternates, duplicates of other instructions, just here for easy handling
+add_opcode(Opcode("JMP",    "0000 0010 1001 1111 aaaa aaaa aaaa aaaa", [], [0]))
+add_opcode(Opcode("CALL",   "0000 0010 1011 1111 aaaa aaaa aaaa aaaa", [], [0]))
+add_opcode(Opcode("RETCC",  "0000 0010 1101 1111"))
+add_opcode(Opcode("RTI",    "0000 0010 1111 1111"))
+add_opcode(Opcode("JR",     "0001 0111 rrr0 1111", [REGISTERS], [0]))
+add_opcode(Opcode("CALLR",  "0001 0111 rrr1 1111", [REGISTERS], [0]))
