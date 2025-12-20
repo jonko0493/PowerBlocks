@@ -18,16 +18,25 @@ macro(dsp_assemble target_name)
         set(ABS_OUTPUT ${DSP_GENERATED_DIR}/${target_name}.bin)
     endif()
 
+    set(ABS_SOURCE_FILES "")
+    foreach(src ${SOURCE_FILES})
+        if(IS_ABSOLUTE "${src}")
+            list(APPEND ABS_SOURCE_FILES "${src}")
+        else()
+            list(APPEND ABS_SOURCE_FILES "${CMAKE_CURRENT_LIST_DIR}/${src}")
+        endif()
+    endforeach()
+
     # Only rebuild if ABS_OUTPUT is missing or outdated
     add_custom_command(
         OUTPUT ${ABS_OUTPUT}
         COMMAND ${Python3_EXECUTABLE}
-                ${DSPASM_CLI_PATH}
-                ${SOURCE_FILES}
+                -m tools.dspasm.dspasm_cli
+                ${ABS_SOURCE_FILES}
                 $<$<BOOL:${DSPASM_HEADER}>:-c>
                 -o ${ABS_OUTPUT}
         DEPENDS ${SOURCE_FILES} ${DSPASM_CLI_PATH}
-        WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+        WORKING_DIRECTORY $ENV{SDK_HOME}
         COMMENT "Assembling DSP microcode: ${SOURCE_FILES} -> ${ABS_OUTPUT}"
         VERBATIM
     )

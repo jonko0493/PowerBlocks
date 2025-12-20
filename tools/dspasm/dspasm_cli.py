@@ -15,9 +15,9 @@ import os
 import datetime
 from pathlib import Path
 
-from dspasm.preprocessor import Preprocessor
-from dspasm.parser import Parser
-from dspasm.utils import dump_tokens_to_file
+from .preprocessor import Preprocessor
+from .parser import Parser
+from .utils import dump_tokens_to_file
 
 def write_header(output: Path, binary):
     object_name = output.stem

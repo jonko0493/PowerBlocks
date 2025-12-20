@@ -79,7 +79,7 @@
 #define IXF_AMDM       0xED // ARAM DMA Request Mask
 
 // Interrupts
-#define IXF_FIRQ       0xFB // IRQ Request
+#define IXF_DIRQ       0xFB // IRQ Request
 
 // Mailbox
 #define IXF_DMDH       0xFC // DSP Mailbox High
