@@ -234,6 +234,15 @@ def evaluate_ternary(tokens):
         else:
             return [Token(evaluate_expression(b), t.value, t.line, t.col, t.file)]
 
+def remove_ignored(tokens):
+    i = 0
+    while i < len(tokens):
+        if tokens[i].type == "NEWLINE":
+            tokens.pop(i)
+            i -= 1
+        
+        i += 1
+
 # Evaluates an expression. Must be strictly numerical
 def evaluate_expression(tokens):
     # Early exit
@@ -242,10 +251,11 @@ def evaluate_expression(tokens):
             assembly_error(tokens[0], "Expected a number")
         
         return tokens[0].value
-
     
     # So we do this in passes, in each pass doing the highest priority operators
     # to the least priority operations to maintain order of operations
+
+    remove_ignored(tokens)
     
     tokens = evaluate_parentheses(tokens)
     
@@ -367,7 +377,7 @@ class TokenConsumer:
             if nests > 0:
                 field.append(value)
 
-                if value.type in end_values:
+                if value.type == "RPAREN":
                     nests -= 1
                 
                 continue
