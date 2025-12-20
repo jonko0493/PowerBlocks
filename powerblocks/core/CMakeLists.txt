@@ -12,6 +12,7 @@ add_library(
     system/syscall.c
     system/ipc.c
     system/gpio.c
+    system/dsp.c
 
     ios/ios.c
     ios/ios_settings.c
