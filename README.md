@@ -1,12 +1,12 @@
 # PowerBlocks SDK
 PowerBlocks is a fully independent SDK for Wii homebrew development.
 
-This project is currently deep within development. Please feel free to contribute and check out [CONTRIBUTING.md](docs/CONTRIBUTING.md).
+[PowerBlocks SDK Documentation](https://rainbain.github.io/PowerBlocks-Docs/index.html)
+
+This project is currently deep within development. Please feel free to contribute and check out [CONTRIBUTING.md](https://rainbain.github.io/PowerBlocks-Docs/contributing.html).
 
 ## Getting Started
-You can use a release of the SDK from the releases section, or build from source. For the windows setup its recommended to use MSYS2. To build from source, check BUILDING.md.
-
-Once a version of the SDK is ready. Check out the examples folder.
+To get started check out the [Getting Started Guide](https://rainbain.github.io/PowerBlocks-Docs/getting_started_index.html).
 
 ## Project Status
 PowerBlocks is currently in development. Here are the main things that are and are not supported.
@@ -16,13 +16,16 @@ Supported:
  2. FreeRTOS Kernel
  3. Video Interface
  4. IOS Communications
+ 5. Core GX implementation.
+ 6. WiiMote Support
+ 7. SDIO + File System Support
 
 Work In Progress:
- 1. Graphics
+ 1. Audio Interface
 
 Not Started Yet:
- 1. WiiMote Support
- 2. SDIO + File System Support
- 3. Audio Interface
- 4. Disk Interface
- 5. WiFi Support
+ 1. Feature Complete GX Implementation
+ 2. Disk Interface
+ 3. WiFi Support
+
+ For a more in-depth roadmap for known missing features of supported functionality check: [Known Issues](https://rainbain.github.io/PowerBlocks-Docs/known_issues.html).

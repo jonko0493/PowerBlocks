@@ -18,6 +18,7 @@
 
 #include "FreeRTOS.h"
 #include "semphr.h"
+#include "timers.h"
 
 #include <string.h>
 
@@ -84,18 +85,6 @@ static const char* TAB = "GX";
 #define PE_ISR_TOKEN_ACKNOWLEDGE  (1<<2)
 #define PE_ISR_FINISH_ACKNOWLEDGE (1<<3)
 
-// Vertex Index Bits
-#define MTXINDX_A_PSN(x)            (((uint32_t)x) << 0) // Position and Normal Matrix index. pairs
-#define MTXINDX_A_TEX0(x)           (((uint32_t)x) << 6)
-#define MTXINDX_A_TEX1(x)           (((uint32_t)x) << 12)
-#define MTXINDX_A_TEX2(x)           (((uint32_t)x) << 18)
-#define MTXINDX_A_TEX3(x)           (((uint32_t)x) << 24)
-
-#define MTXINDX_B_TEX4(x)           (((uint32_t)x) << 0)
-#define MTXINDX_B_TEX5(x)           (((uint32_t)x) << 6)
-#define MTXINDX_B_TEX6(x)           (((uint32_t)x) << 12)
-#define MTXINDX_B_TEX7(x)           (((uint32_t)x) << 18)
-
 // Vertex Descriptor Bits
 #define VCD_LOW_HAS_POSNRMMTXIDX    (1<<0)
 #define VCD_LOW_HAS_TEXCOORDMTXIDX0 (1<<1)
@@ -160,6 +149,27 @@ static const char* TAB = "GX";
 #define VAT_C_TEX7FMT(x)             (((uint32_t)x)<<24) // gx_vtxattr_component_format_t
 #define VAT_C_TEX7SHFT(x)            (((uint32_t)x)<<27) // fractional bits
 
+#define XF_MTXINDX_A_PSN(x)            (((uint32_t)x) << 0) // Position and Normal Matrix index. pairs
+#define XF_MTXINDX_A_TEX0(x)           (((uint32_t)x) << 6)
+#define XF_MTXINDX_A_TEX1(x)           (((uint32_t)x) << 12)
+#define XF_MTXINDX_A_TEX2(x)           (((uint32_t)x) << 18)
+#define XF_MTXINDX_A_TEX3(x)           (((uint32_t)x) << 24)
+
+#define XF_MTXINDX_B_TEX4(x)           (((uint32_t)x) << 0)
+#define XF_MTXINDX_B_TEX5(x)           (((uint32_t)x) << 6)
+#define XF_MTXINDX_B_TEX6(x)           (((uint32_t)x) << 12)
+#define XF_MTXINDX_B_TEX7(x)           (((uint32_t)x) << 18)
+
+#define XF_TEX_PROJECT            (1<<1)
+#define XF_TEX_INPUT_FORM         (1<<2)
+#define XF_TEX_TEXGEN_TYPE(x)     ((x)<<4)
+#define XF_TEX_SOURCE_ROW(x)      ((x)<<7)
+#define XF_TEX_EMBOSS_SOURCE(x)   ((x)<<12)
+#define XF_TEX_EMBOSS_LIGHT(x)    ((x)<<15)
+
+#define XF_DUALTEX_DUALMTX(x)     ((x)<<0)
+#define XF_DUALTEX_NORMAL_ENABLE  (1<<8)
+
 // BP Generation Mode Bits
 #define BP_GENMODE_NTEX(x)      ((x & 0xF) << 0)
 #define BP_GENMODE_NCOL(x)      ((x & 0x1F) << 4)
@@ -198,6 +208,78 @@ static const char* TAB = "GX";
 #define BP_PE_COPY_EXECUTE_LINE_MODE(x)   ((x)<<12)
 #define BP_PE_COPY_EXECUTE_EXECUTE        (1<<14)
 
+#define BP_TEV_COLOR_ENV_SELECT_D(x)      ((x)<<0)
+#define BP_TEV_COLOR_ENV_SELECT_C(x)      ((x)<<4)
+#define BP_TEV_COLOR_ENV_SELECT_B(x)      ((x)<<8)
+#define BP_TEV_COLOR_ENV_SELECT_A(x)      ((x)<<12)
+#define BP_TEV_COLOR_ENV_BIAS(x)          ((x)<<16)
+#define BP_TEV_COLOR_ENV_SUB              (1<<18)
+#define BP_TEV_COLOR_ENV_CLAMP            (1<<19)
+#define BP_TEV_COLOR_ENV_SHIFT(x)         ((x)<<20)
+#define BP_TEV_COLOR_ENV_DEST(X)          ((X)<<22)
+#define BP_TEV_COLOR_ENV_COMPARISON(x)    ((x)<<19) // Enabled if BIAS = 3
+
+#define BP_TEV_ALPHA_ENV_RSWAP(x)         ((x)<<0)
+#define BP_TEV_ALPHA_ENV_TSWAP(x)         ((x)<<2)
+#define BP_TEV_ALPHA_ENV_SELECT_D(x)      ((x)<<4)
+#define BP_TEV_ALPHA_ENV_SELECT_C(x)      ((x)<<7)
+#define BP_TEV_ALPHA_ENV_SELECT_B(x)      ((x)<<10)
+#define BP_TEV_ALPHA_ENV_SELECT_A(x)      ((x)<<13)
+#define BP_TEV_ALPHA_ENV_BIAS(x)          ((x)<<16)
+#define BP_TEV_ALPHA_ENV_SUB              (1<<18)
+#define BP_TEV_ALPHA_ENV_CLAMP            (1<<19)
+#define BP_TEV_ALPHA_ENV_SHIFT(x)         ((x)<<20)
+#define BP_TEV_ALPHA_ENV_DEST(X)          ((X)<<22)
+#define BP_TEV_ALPHA_ENV_COMPARISON(x)    ((x)<<19) // Enabled if BIAS = 3
+
+#define BP_TEV_REGISTERL_R(x)             ((x&0x7FF)<<0)
+#define BP_TEV_REGISTERL_A(x)             ((x&0x7FF)<<12)
+
+#define BP_TEV_REGISTERH_B(x)             ((x&0x7FF)<<0)
+#define BP_TEV_REGISTERH_G(x)             ((x&0x7FF)<<12)
+
+#define BP_TX_SETMODE0_WRAP_S(x)          ((x)<<0)
+#define BP_TX_SETMODE0_WRAP_T(x)          ((x)<<2)
+#define BP_TX_SETMODE0_MAG_FILTER         (1<<4)
+#define BP_TX_SETMODE0_MIN_FILTER(x)      ((x)<<5)
+#define BP_TX_SETMODE0_DIAGLOAD           (1<<8)
+#define BP_TX_SETMODE0_LODBIAS(x)         ((x)<<9)
+#define BP_TX_SETMODE0_MAXANSIO(x)        ((x)<<19)
+#define BP_TX_SETMODE0_LODCLAMP           (1<<21)
+
+#define BP_TX_SETMODE1_MIN_LOD(x)         ((x)<<0)
+#define BP_TX_SETMODE1_MAX_LOD(x)         ((x)<<8)
+
+#define BP_TX_IMAGE0_WIDTH(x)             ((x)<<0)
+#define BP_TX_IMAGE0_HEIGHT(x)            ((x)<<10)
+#define BP_TX_IMAGE0_FORMAT(x)            ((x)<<20)
+
+#define BP_TX_IMAGE1_TMEM_OFFSET(x)       ((x)<<0)
+#define BP_TX_IMAGE1_CACHE_WIDTH(x)       ((x)<<15)
+#define BP_TX_IMAGE1_CACHE_HEIGHT(x)      ((x)<<18)
+#define BP_TX_IMAGE1_PRELOAD              (1<<21)
+
+#define BP_TX_IMAGE2_TMEM_OFFSET(x)       ((x)<<0)
+#define BP_TX_IMAGE2_CACHE_WIDTH(x)       ((x)<<15)
+#define BP_TX_IMAGE2_CACHE_HEIGHT(x)      ((x)<<18)
+#define BP_TX_IMAGE2_PRELOAD              (1<<21)
+
+#define BP_TX_IMAGE3_IMAGE_BASE(x)        ((x)<<0)
+
+#define BP_TX_LUT_TMEM_OFFSET             ((x)<<0)
+#define BP_TX_LUT_FORMAT                  ((x)<<10)
+
+#define BP_SSIZE_SCALE(x)                  ((x)<<0)
+#define BP_SSIZE_BS                       (1<<16)
+#define BP_SSIZE_WS                       (1<<17)
+#define BP_SSIZE_LF                       (1<<18)
+#define BP_SSIZE_PF                       (1<<19)
+
+#define BP_TSIZE_SCALE(x)                 ((x)<<0)
+#define BP_TSIZE_BT                       (1<<16)
+#define BP_TSIZE_WT                       (1<<17)
+
+
 #define BP_PE_DONE_END_OF_LIST  (1<<1)
 
 // 2 MB Embedded Frame Buffer
@@ -209,12 +291,16 @@ static const char* TAB = "GX";
 #define GX_DIRTY_VCD_NEEDS_UPDATE                (1<<8) // Updates the VCD at the next draw call. Updates XF statistics.
 #define GX_DIRTY_XF_COLORS_NEEDS_UPDATE          (1<<9) // Update the color count and control registers of the XF
 #define GX_DIRTY_XF_TEXCOORD_NEEDS_UPDATE        (1<<10) // Updates the texture coord count and control registers of the XF
-#define GX_DIRTY_MATRIX_INDEX_NEEDS_UPDATE       (1<<11) // Update position/normal/texture matrix indexes
-#define GX_DIRTY_BP_GENMODE_NEEDS_UPDATE         (1<<12) // Update the BP generation mode register
+#define GX_DIRTY_XF_DUAL_TEXCOORD_NEEDS_UPDATE   (1<<11) // Updates the dual texcoord control registers
+#define GX_DIRTY_MATRIX_INDEX_NEEDS_UPDATE       (1<<12) // Update position/normal/texture matrix indexes
+#define GX_DIRTY_BP_GENMODE_NEEDS_UPDATE         (1<<13) // Update the BP generation mode register
 
 #define BIT(v, bit, set) ((set) ? (v | bit) : (v & ~bit))
 
 static struct {
+    // Thread that is suspended/resumed in accordance to FIFO high/low watermarks
+    xTaskHandle render_thread;
+
     // We save the register states then play them out to hardware when their needed.
     // This is similar to what libogc does. The point being to minimize pipeline overhead
     // and keep compatibility with libogc programs.
@@ -226,7 +312,9 @@ static struct {
     uint32_t vat_tables[3][8]; // 3 sets, 8 formats.
     uint32_t normals;   // Normal settings, 0: none, 1: 1 normal, 2: NBT (3)
     uint32_t genmode; // Stores the color and texcoord settings to be passed from XF to BP/TEV
-    uint32_t xf_color_settings[4]; // Updated with genmode.
+    uint32_t xf_color_settings[4];
+    uint32_t xf_texcoord_settings[8];
+    uint32_t xf_dual_texcoord_settings[4];
 
     uint32_t bp_efb_top_left; // Frame buffer copy settings
     uint32_t bp_efb_width_height;
@@ -241,6 +329,23 @@ static struct {
 static StaticSemaphore_t semaphores_static;
 static SemaphoreHandle_t gx_pe_finish_semaphore; 
 
+// Helper functions for resuming and suspending the render thread
+// In FreeRTOS you can not modify states of threads like vTaskSuspend form
+// an ISR and expect deterministic behaver by design.
+// So the best way is to schedule the FreeRTOS timer daemon to do it for you
+
+static void gx_daemon_suspend_render_thread(void* unused_1, uint32_t unused_2) {
+    if(gx_state.render_thread != NULL) {
+        vTaskSuspend(gx_state.render_thread);
+    }
+}
+
+static void gx_daemon_resume_render_thread(void* unused_1, uint32_t unused_2) {
+    if(gx_state.render_thread != NULL) {
+        vTaskResume(gx_state.render_thread);
+    }
+}
+
 // Called when the pixel engine finishes its work.
 static void gx_irq_pe_finish(exception_irq_type_t irq) {
     // Acknowledge.
@@ -248,6 +353,36 @@ static void gx_irq_pe_finish(exception_irq_type_t irq) {
 
     // Alert waiting task of draw finish
     xSemaphoreGiveFromISR(gx_pe_finish_semaphore, &exception_isr_context_switch_needed);
+}
+
+// Called when fifo interrupts are incountred
+static void gx_irq_fifo() {
+    uint16_t cp_status = CP_STATUS;
+
+    // FIFO Overflow Interrupt
+    if(cp_status & CP_STATUS_GX_FIFO_OVERFLOW) {
+        // Alert daemon to suspend render thread
+        xTimerPendFunctionCallFromISR(gx_daemon_suspend_render_thread, NULL, 0, &exception_isr_context_switch_needed);
+
+        // Clear it
+        CP_CLEAR = CP_CLEAR_FIFO_OVERFLOW;
+
+        // Enable Underflow Interrupt
+        CP_CONTROL = CP_CONTROL_FIFO_READ | CP_CONTROL_GP_LINK_ENABLE |
+                 CP_CONTROL_FIFO_UNDERFLOW_IRQ_ENABLE;
+    }
+
+    if(cp_status & CP_STATUS_GX_FIFO_UNDERFLOW) {
+        // Alert daemon to resume render thread
+        xTimerPendFunctionCallFromISR(gx_daemon_resume_render_thread, NULL, 0, &exception_isr_context_switch_needed);
+
+        // Clear it
+        CP_CLEAR = CP_CLEAR_FIFO_UNDERFLOW;
+
+        // Enable Overflow Interrupt
+        CP_CONTROL = CP_CONTROL_FIFO_READ | CP_CONTROL_GP_LINK_ENABLE |
+                 CP_CONTROL_FIFO_OVERFLOW_IRQ_ENABLE;
+    }
 }
 
 // This updates the VCD.
@@ -278,7 +413,7 @@ static void gx_flush_vcd() {
     if(gx_state.vcd_low & VCD_LOW_COL1(3)) colors++;
 
     GX_WPAR_XF_LOAD(GX_XF_REGISTER_VERTEX_STATS, 1);
-    GX_WPAR_U32 = (texcoords << 2) | (gx_state.normals << 2) | colors;
+    GX_WPAR_U32 = (texcoords << 4) | (gx_state.normals << 2) | colors;
 }
 
 static void gx_flush_xf_color_settings() {
@@ -295,8 +430,24 @@ static void gx_flush_xf_color_settings() {
 }
 
 static void gx_flush_texcoord_settings() {
-    GX_WPAR_XF_LOAD(GX_XF_REGISTER_TEXCOORD_COUNT, 1);
+    GX_WPAR_XF_LOAD(GX_XF_REGISTER_TEXCOORD_COUNT, 1 + 8);
     GX_WPAR_U32 = (gx_state.genmode >> 0) & 0xF;
+    GX_WPAR_U32 = gx_state.xf_texcoord_settings[0];
+    GX_WPAR_U32 = gx_state.xf_texcoord_settings[1];
+    GX_WPAR_U32 = gx_state.xf_texcoord_settings[2];
+    GX_WPAR_U32 = gx_state.xf_texcoord_settings[3];
+    GX_WPAR_U32 = gx_state.xf_texcoord_settings[4];
+    GX_WPAR_U32 = gx_state.xf_texcoord_settings[5];
+    GX_WPAR_U32 = gx_state.xf_texcoord_settings[6];
+    GX_WPAR_U32 = gx_state.xf_texcoord_settings[7];
+}
+
+static void gx_flush_dual_texcoord_settings() {
+    GX_WPAR_XF_LOAD(GX_XF_REGISTER_DUALTEX0, 4);
+    GX_WPAR_U32 = gx_state.xf_dual_texcoord_settings[0];
+    GX_WPAR_U32 = gx_state.xf_dual_texcoord_settings[1];
+    GX_WPAR_U32 = gx_state.xf_dual_texcoord_settings[2];
+    GX_WPAR_U32 = gx_state.xf_dual_texcoord_settings[3];
 }
 
 static void gx_flush_matrix_indexes() {
@@ -305,9 +456,9 @@ static void gx_flush_matrix_indexes() {
 
     /// TODO: Can you load multiple XF registers in 1 command, or is that just
     // for XF Memory?
-    GX_WPAR_XF_LOAD(GX_XF_REGISTERS_MTXIDX_A, 1);
+    GX_WPAR_XF_LOAD(GX_XF_REGISTER_MTXIDX_A, 1);
     GX_WPAR_U32 = gx_state.matrix_index_a;
-    GX_WPAR_XF_LOAD(GX_XF_REGISTERS_MTXIDX_B, 1);
+    GX_WPAR_XF_LOAD(GX_XF_REGISTER_MTXIDX_B, 1);
     GX_WPAR_U32 = gx_state.matrix_index_b;
 }
 
@@ -346,8 +497,12 @@ static void gx_flush_state() {
         gx_flush_xf_color_settings();
     }
     if(gx_state.dirty & GX_DIRTY_XF_TEXCOORD_NEEDS_UPDATE) {
-        // Update the color count to BP and settings
+        // Update the texcoord gen count and control registers
         gx_flush_texcoord_settings();
+    }
+    if(gx_state.dirty & GX_DIRTY_XF_DUAL_TEXCOORD_NEEDS_UPDATE) {
+        // Update dual texcoord control registers
+        gx_flush_dual_texcoord_settings();
     }
     if(gx_state.dirty & GX_DIRTY_MATRIX_INDEX_NEEDS_UPDATE) {
         // Updates them in both the CP and XF.
@@ -368,12 +523,18 @@ void gx_initialize(const gx_fifo_t* fifo, const video_profile_t* video_profile) 
     // This should be set later on, just need to make sure!
     memset(&gx_state, 0, sizeof(gx_state));
 
+    // Set current render thread
+    gx_set_render_thread(xTaskGetCurrentTaskHandle());
+
     // Set the current hardware fifo
     // Will be needed to configure later on
     gx_fifo_set(fifo);
 
     // It will read commands and pass them on to the pipeline.
-    CP_CONTROL = CP_CONTROL_FIFO_READ | CP_CONTROL_GP_LINK_ENABLE;
+    // We also want to generate interrupts to pause/resume the render thread
+    // But only the high one so far
+    CP_CONTROL = CP_CONTROL_FIFO_READ | CP_CONTROL_GP_LINK_ENABLE |
+                 CP_CONTROL_FIFO_OVERFLOW_IRQ_ENABLE;
 
     // GX FIFO seems to ignore some of the first commands
     // May be an attaching/detaching issue. This helps though.
@@ -393,8 +554,9 @@ void gx_initialize(const gx_fifo_t* fifo, const video_profile_t* video_profile) 
     // Create semaphore for pe finish (draw done, begin copy)
     gx_pe_finish_semaphore = xSemaphoreCreateCountingStatic(4, 0, &semaphores_static);
 
-    // Install interrupt handler
+    // Install interrupt handlers
     exceptions_install_irq(gx_irq_pe_finish, EXCEPTION_IRQ_TYPE_PE_FINISH);
+    exceptions_install_irq(gx_irq_fifo, EXCEPTION_IRQ_TYPE_FIFO);
 
     // Enable interrupts
     PE_ISR = PE_ISR_FINISH_ENABLE;
@@ -407,18 +569,33 @@ void gx_initialize_state() {
     // Empty vertex formats
     for(int i = 0; i < 8; i++)
         gx_vtxfmtattr_clear(i);
+
+    // Load Default Identity Matrix
+    matrix34 identity;
+    matrix34_identity(identity);
+
+    gx_flash_matrix(identity, GX_MTX_ID_IDENTITY, true);
+    gx_flash_dual_texcoord_matrix(identity, GX_MTX_ID_IDENTITY, true);
     
-    // Clear matrix indices
-    gx_state.matrix_index_a = 0;
-    gx_state.matrix_index_b = 0;
-    gx_state.dirty |= GX_DIRTY_MATRIX_INDEX_NEEDS_UPDATE;
+    // Set all these to the identity matrix.
+    gx_set_current_psn_matrix(GX_MTX_ID_IDENTITY);
+    gx_set_current_texcoord_matrix(GX_TEXTURE_MAP_0, GX_MTX_ID_IDENTITY);
+    gx_set_current_texcoord_matrix(GX_TEXTURE_MAP_1, GX_MTX_ID_IDENTITY);
+    gx_set_current_texcoord_matrix(GX_TEXTURE_MAP_2, GX_MTX_ID_IDENTITY);
+    gx_set_current_texcoord_matrix(GX_TEXTURE_MAP_3, GX_MTX_ID_IDENTITY);
+    gx_set_current_texcoord_matrix(GX_TEXTURE_MAP_4, GX_MTX_ID_IDENTITY);
+    gx_set_current_texcoord_matrix(GX_TEXTURE_MAP_5, GX_MTX_ID_IDENTITY);
+    gx_set_current_texcoord_matrix(GX_TEXTURE_MAP_6, GX_MTX_ID_IDENTITY);
+    gx_set_current_texcoord_matrix(GX_TEXTURE_MAP_7, GX_MTX_ID_IDENTITY);
+
+
 
     // Turn off all gens
     gx_state.genmode = 0;
     gx_set_color_channels(0);
     gx_set_texcoord_channels(0);
 
-    // Default XF Lighting
+    // Default XF Color / Lighting
     gx_light_t empty;
     memset(&empty, 0, sizeof(empty));
     gx_configure_color_channel(GX_COLOR_CHANNEL_COLOR0, 0, false, true, true, GX_DIFFUSE_MODE_NONE, GX_ATTENUATION_MODE_NONE);
@@ -438,6 +615,21 @@ void gx_initialize_state() {
     gx_flash_xf_color(GX_XF_COLOR_MATERIAL_0, 0, 0, 0, 255);
     gx_flash_xf_color(GX_XF_COLOR_MATERIAL_1, 0, 0, 0, 255);
 
+    // Default Texcoord Settings
+    gx_configure_texcoord_channel(GX_TEXTURE_MAP_0, GX_TEXGEN_SOURCE_TEX0, GX_TEXGEN_TYPE_REGULAR, false, false, 0);
+    gx_configure_texcoord_channel(GX_TEXTURE_MAP_1, GX_TEXGEN_SOURCE_TEX1, GX_TEXGEN_TYPE_REGULAR, false, false, 0);
+    gx_configure_texcoord_channel(GX_TEXTURE_MAP_2, GX_TEXGEN_SOURCE_TEX2, GX_TEXGEN_TYPE_REGULAR, false, false, 0);
+    gx_configure_texcoord_channel(GX_TEXTURE_MAP_3, GX_TEXGEN_SOURCE_TEX3, GX_TEXGEN_TYPE_REGULAR, false, false, 0);
+    gx_configure_texcoord_channel(GX_TEXTURE_MAP_4, GX_TEXGEN_SOURCE_TEX4, GX_TEXGEN_TYPE_REGULAR, false, false, 0);
+    gx_configure_texcoord_channel(GX_TEXTURE_MAP_5, GX_TEXGEN_SOURCE_TEX5, GX_TEXGEN_TYPE_REGULAR, false, false, 0);
+    gx_configure_texcoord_channel(GX_TEXTURE_MAP_6, GX_TEXGEN_SOURCE_TEX6, GX_TEXGEN_TYPE_REGULAR, false, false, 0);
+    gx_configure_texcoord_channel(GX_TEXTURE_MAP_7, GX_TEXGEN_SOURCE_TEX7, GX_TEXGEN_TYPE_REGULAR, false, false, 0);
+    gx_configure_dual_texcoord(GX_TEXTURE_MAP_0, GX_MTX_ID_IDENTITY, false);
+    gx_configure_dual_texcoord(GX_TEXTURE_MAP_1, GX_MTX_ID_IDENTITY, false);
+    gx_configure_dual_texcoord(GX_TEXTURE_MAP_2, GX_MTX_ID_IDENTITY, false);
+    gx_configure_dual_texcoord(GX_TEXTURE_MAP_3, GX_MTX_ID_IDENTITY, false);
+
+
     // Default PE setup
     gx_set_z_mode(true, GX_COMPARE_LESS_EQUAL, true); // Z filtering? YES
     gx_set_color_update(true, true);
@@ -448,6 +640,35 @@ void gx_initialize_state() {
     gx_set_line_mode(GX_LINE_MODE_PROGRESSIVE);
     gx_set_clear_color(0, 0, 0, 0);
     gx_set_clear_z(0xFFFFFF);
+
+    //
+    // Default TEV Stages
+    //
+    gx_set_tev_stages(1);
+
+    gx_tev_stage_t empty_tev;
+    gx_initialize_tev_stage(&empty_tev);
+    gx_flash_tev_stage(GX_TEV_STAGE_0, &empty_tev);
+
+    // For later stages lets make it pass color/alpha
+    gx_set_tev_stage_color_input(&empty_tev, GX_TEV_IO_ZERO, GX_TEV_IO_ZERO, GX_TEV_IO_ZERO, GX_TEV_IO_PREVIOUS);
+    gx_set_tev_stage_alpha_input(&empty_tev, GX_TEV_IO_ZERO, GX_TEV_IO_ZERO, GX_TEV_IO_ZERO, GX_TEV_IO_PREVIOUS);
+
+    gx_flash_tev_stage(GX_TEV_STAGE_1, &empty_tev);
+    gx_flash_tev_stage(GX_TEV_STAGE_2, &empty_tev);
+    gx_flash_tev_stage(GX_TEV_STAGE_3, &empty_tev);
+    gx_flash_tev_stage(GX_TEV_STAGE_4, &empty_tev);
+    gx_flash_tev_stage(GX_TEV_STAGE_5, &empty_tev);
+    gx_flash_tev_stage(GX_TEV_STAGE_6, &empty_tev);
+    gx_flash_tev_stage(GX_TEV_STAGE_7, &empty_tev);
+    gx_flash_tev_stage(GX_TEV_STAGE_8, &empty_tev);
+    gx_flash_tev_stage(GX_TEV_STAGE_9, &empty_tev);
+    gx_flash_tev_stage(GX_TEV_STAGE_10, &empty_tev);
+    gx_flash_tev_stage(GX_TEV_STAGE_11, &empty_tev);
+    gx_flash_tev_stage(GX_TEV_STAGE_12, &empty_tev);
+    gx_flash_tev_stage(GX_TEV_STAGE_13, &empty_tev);
+    gx_flash_tev_stage(GX_TEV_STAGE_14, &empty_tev);
+    gx_flash_tev_stage(GX_TEV_STAGE_15, &empty_tev);
 }
 
 void gx_initialize_video(const video_profile_t* video_profile) {
@@ -458,7 +679,7 @@ void gx_initialize_video(const video_profile_t* video_profile) {
     gx_set_copy_filter(video_profile->copy_pattern, video_profile->copy_filer);
 }
 
-void gx_fifo_create(gx_fifo_t* fifo, void* fifo_buffer, uint32_t fifo_buffer_size) {
+void gx_fifo_initialize(gx_fifo_t* fifo, void* fifo_buffer, uint32_t fifo_buffer_size) {
     // Clear that thing
     memset(fifo_buffer, 0, fifo_buffer_size);
 
@@ -467,8 +688,8 @@ void gx_fifo_create(gx_fifo_t* fifo, void* fifo_buffer, uint32_t fifo_buffer_siz
     
     fifo->base_address = SYSTEM_MEM_PHYSICAL(fifo_buffer);
     fifo->end_address = fifo->base_address + fifo_buffer_size - 4;
-    fifo->high_watermark = 0;
-    fifo->low_watermark = 0;
+    fifo->high_watermark = fifo_buffer_size - GX_FIFO_WATERMARK;
+    fifo->low_watermark = GX_FIFO_WATERMARK;
     fifo->distance = 0;
     fifo->write_head = fifo->base_address;
     fifo->read_head = fifo->base_address;
@@ -705,11 +926,6 @@ void gx_vtxfmtattr_set(uint8_t attribute_index, gx_vtxdesc_t attribute, gx_vtxat
     }
 }
 
-void gx_set_texcoord_channels(uint32_t count) {
-    gx_state.genmode = (gx_state.genmode & ~BP_GENMODE_NTEX(0xF)) | BP_GENMODE_NTEV(count);
-    gx_state.dirty |= GX_DIRTY_BP_GENMODE_NEEDS_UPDATE | GX_DIRTY_XF_TEXCOORD_NEEDS_UPDATE;
-}
-
 void gx_begin(gx_primitive_t primitive, uint8_t attribute, uint16_t count) {
     // We flush the GPU state, like vertex descriptions up until the draw call.
     // So that the user may modify them how they like without bogging the pipeline down
@@ -729,6 +945,10 @@ void gx_draw_done() {
 
     // Wait for it to signal draw done
     xSemaphoreTake(gx_pe_finish_semaphore, portMAX_DELAY);
+}
+
+void gx_set_render_thread(TaskHandle_t task) {
+    gx_state.render_thread = task;
 }
 
 void gx_set_clear_color(uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
@@ -921,6 +1141,61 @@ void gx_copy_framebuffer(framebuffer_t* framebuffer, bool clear) {
     }
 }
 
+/* -------------------Textures--------------------- */
+
+extern void gx_initialize_texture(gx_texture_t* texture, const void* data, gx_texture_format_t format, int width, int height,
+                                  gx_texture_wrap_t s_wrap, gx_texture_wrap_t t_wrap, bool mipmap) {
+    
+    bool indexed_colors = (format == GX_TEXTURE_FORMAT_C4) || (format == GX_TEXTURE_FORMAT_C8) || (format == GX_TEXTURE_FORMAT_C14X2);
+    gx_texture_min_filter min_filter = mipmap ? (indexed_colors ? GX_TEXTURE_MIN_FILTER_LINEAR_MIP_NEAR : GX_TEXTURE_MIN_FILTER_LINEAR_MIP_LINEAR) : GX_TEXTURE_MIN_FILTER_LINEAR;
+
+
+
+    // Basic sampling settings
+    texture->mode0 = BP_TX_SETMODE0_WRAP_S(s_wrap) | BP_TX_SETMODE0_WRAP_T(t_wrap) | BP_TX_SETMODE0_MAG_FILTER |
+                     BP_TX_SETMODE0_MIN_FILTER(min_filter);
+    
+    // Level of detail settings. None for a standard texture
+    texture->mode1 = 0;
+
+    // Texture size and format
+    texture->image0 = BP_TX_IMAGE0_WIDTH(width-1) | BP_TX_IMAGE0_HEIGHT(height-1) | BP_TX_IMAGE0_FORMAT(format);
+
+    // Even and odd LOD Addresses (0 there are no lods)
+    texture->image1 = 0;
+    texture->image2 = 0;
+
+    // Texture Data Address, 32 byte algined
+    texture->image3 = SYSTEM_MEM_PHYSICAL(data) >> 5;
+
+    // Not LUTS
+    texture->lut = 0;
+}
+
+void gx_flash_texture(gx_texture_map_t map, const gx_texture_t* texture) {
+    // Flash Texcoord Control Registers
+    GX_WPAR_BP_LOAD((GX_BP_REGISTERS_SSIZE0 + (map << 24)) |
+        BP_SSIZE_SCALE(texture->image0 & 0x3ff) | // Extract width for scale
+        (((texture->mode0 & BP_TX_SETMODE0_WRAP_S(0b11)) == GX_WRAP_REPEAT) ? BP_SSIZE_BS : 0) // Biasing enaable if were repeating 
+    );
+    GX_WPAR_BP_LOAD((GX_BP_REGISTERS_TSIZE0 + (map << 24)) |
+        BP_TSIZE_SCALE((texture->image0 >> 10) & 0x3ff) | // Extract height for scale
+        ((((texture->mode0 & BP_TX_SETMODE0_WRAP_T(0b11)) >> 2) == GX_WRAP_REPEAT) ? BP_TSIZE_BT : 0) // Biasing enable if were repeating 
+    );
+
+    // For some reason the texture control registers are split into 2 groups.
+    // The first 4, then another 4 offset by 0x20.
+    uint32_t tex_register_offset = ((map > GX_TEXTURE_MAP_3) ? (map - GX_TEXTURE_MAP_4 + 0x20) : map) << 24;
+
+    GX_WPAR_BP_LOAD((GX_BP_REGISTERS_TX_SETMODE0_I0 + tex_register_offset) | texture->mode0);
+    GX_WPAR_BP_LOAD((GX_BP_REGISTERS_TX_SETMODE1_I0 + tex_register_offset) | texture->mode1);
+    GX_WPAR_BP_LOAD((GX_BP_REGISTERS_TX_SETIMAGE0_I0 + tex_register_offset) | texture->image0);
+    GX_WPAR_BP_LOAD((GX_BP_REGISTERS_TX_SETIMAGE1_I0 + tex_register_offset) | texture->image1);
+    GX_WPAR_BP_LOAD((GX_BP_REGISTERS_TX_SETIMAGE2_I0 + tex_register_offset) | texture->image2);
+    GX_WPAR_BP_LOAD((GX_BP_REGISTERS_TX_SETIMAGE3_I0 + tex_register_offset) | texture->image3);
+    GX_WPAR_BP_LOAD((GX_BP_REGISTERS_TX_SETTLUT_0 + tex_register_offset) | texture->lut);
+}
+
 /* -------------------XF Matrix Control--------------------- */
 
 void gx_flash_viewport(float x, float y, float width, float height, float near, float far, bool jitter) {
@@ -961,8 +1236,8 @@ void gx_flash_projection(const matrix4 mtx, bool is_perspective) {
     GX_WPAR_U32 = is_perspective ? 0 : 1;
 }
 
-void gx_flash_pos_matrix(const matrix34 mtx, gx_psnmtx_idx index) {
-    GX_WPAR_XF_LOAD((uint32_t)index * 4, 12);
+void gx_flash_matrix(const matrix34 mtx, gx_mtx_id_t index, bool type) {
+    GX_WPAR_XF_LOAD(GX_XF_MEMORY_POSTEX_MTX_0 + (uint32_t)index * 4, type ? 12 : 8);
     GX_WPAR_F32 = mtx[0][0];
     GX_WPAR_F32 = mtx[0][1];
     GX_WPAR_F32 = mtx[0][2];
@@ -971,14 +1246,16 @@ void gx_flash_pos_matrix(const matrix34 mtx, gx_psnmtx_idx index) {
     GX_WPAR_F32 = mtx[1][1];
     GX_WPAR_F32 = mtx[1][2];
     GX_WPAR_F32 = mtx[1][3];
-    GX_WPAR_F32 = mtx[2][0];
-    GX_WPAR_F32 = mtx[2][1];
-    GX_WPAR_F32 = mtx[2][2];
-    GX_WPAR_F32 = mtx[2][3];
+    if(type) {
+        GX_WPAR_F32 = mtx[2][0];
+        GX_WPAR_F32 = mtx[2][1];
+        GX_WPAR_F32 = mtx[2][2];
+        GX_WPAR_F32 = mtx[2][3];
+    }
 }
 
-void gx_flash_nrm_matrix(const matrix3 mtx, gx_psnmtx_idx index) {
-    GX_WPAR_XF_LOAD(0x0400 + (uint32_t)index * 3, 9);
+void gx_flash_nrm_matrix(const matrix3 mtx, gx_mtx_id_t index) {
+    GX_WPAR_XF_LOAD(GX_XF_MEMORY_NORMAL_MTX_0 + (uint32_t)index * 3, 9);
     GX_WPAR_F32 = mtx[0][0];
     GX_WPAR_F32 = mtx[0][1];
     GX_WPAR_F32 = mtx[0][2];
@@ -990,9 +1267,9 @@ void gx_flash_nrm_matrix(const matrix3 mtx, gx_psnmtx_idx index) {
     GX_WPAR_F32 = mtx[2][2];
 }
 
-void gx_set_current_psn_matrix(gx_psnmtx_idx index) {
-    gx_state.matrix_index_a &= ~MTXINDX_A_PSN(0b111111);
-    gx_state.matrix_index_a |= MTXINDX_A_PSN((uint32_t)index); // Addressed by row.
+void gx_set_current_psn_matrix(gx_mtx_id_t index) {
+    gx_state.matrix_index_a &= ~XF_MTXINDX_A_PSN(0b111111);
+    gx_state.matrix_index_a |= XF_MTXINDX_A_PSN((uint32_t)index); // Addressed by row.
     gx_state.dirty |= GX_DIRTY_MATRIX_INDEX_NEEDS_UPDATE;
 }
 
@@ -1010,6 +1287,7 @@ void gx_configure_color_channel(gx_color_channel_t channel, gx_light_bit_t light
     
     uint32_t channel_config = lights;
 
+    /// TODO: Why did you not use defines to control some of these XF parameters.
     if(lighting) // Enable lighting if you please.
         channel_config |= (1<<1);
     if(ambient_source) // Enable ambiant from vertex color
@@ -1030,7 +1308,7 @@ void gx_flash_xf_color(gx_xf_color_t id, uint8_t r, uint8_t g, uint8_t b, uint8_
 }
 
 void gx_flash_light(gx_light_id_t id, const gx_light_t* light) {
-    GX_WPAR_XF_LOAD(id, 16);
+    GX_WPAR_XF_LOAD(GX_XF_MEMORY_LIGHT0 + id * 16, 16);
     GX_WPAR_U32 = 0;
     GX_WPAR_U32 = 0;
     GX_WPAR_U32 = 0;
@@ -1047,4 +1325,176 @@ void gx_flash_light(gx_light_id_t id, const gx_light_t* light) {
     GX_WPAR_F32 = light->direction.x;
     GX_WPAR_F32 = light->direction.y;
     GX_WPAR_F32 = light->direction.z;
+}
+
+/* -------------------XF TexCoord Control--------------------- */
+
+void gx_set_texcoord_channels(uint32_t count) {
+    gx_state.genmode = (gx_state.genmode & ~BP_GENMODE_NTEX(0xF)) | BP_GENMODE_NTEX(count);
+    gx_state.dirty |= GX_DIRTY_BP_GENMODE_NEEDS_UPDATE | GX_DIRTY_XF_TEXCOORD_NEEDS_UPDATE;
+}
+
+void gx_configure_texcoord_channel(gx_texture_map_t map, gx_texgen_source_t source, gx_texgen_type_t type, bool projection, bool three_component, gx_light_id_t embossing_light) {
+    uint32_t emboss_source = type == GX_TEXGEN_TYPE_EMBOSS ? source - GX_TEXGEN_SOURCE_TEX0 : 0; // Texture channel for embrossing
+    uint32_t tex =  XF_TEX_SOURCE_ROW(source) | XF_TEX_TEXGEN_TYPE(type) | XF_TEX_EMBOSS_LIGHT(embossing_light) |  XF_TEX_EMBOSS_SOURCE(emboss_source & 0b111) |
+                    (projection ? XF_TEX_PROJECT : 0) | (three_component ? XF_TEX_INPUT_FORM : 0);
+    
+    gx_state.xf_texcoord_settings[map] = tex;
+    gx_state.dirty |= GX_DIRTY_XF_TEXCOORD_NEEDS_UPDATE;
+}
+
+void gx_configure_dual_texcoord(gx_texture_map_t map, gx_mtx_id_t index, bool normalize) {
+    gx_state.xf_dual_texcoord_settings[map] = XF_DUALTEX_DUALMTX(index) | (normalize ? XF_DUALTEX_NORMAL_ENABLE : 0);
+    gx_state.dirty |= GX_DIRTY_XF_DUAL_TEXCOORD_NEEDS_UPDATE;
+}
+
+void gx_flash_dual_texcoord_matrix(matrix34 mtx, gx_mtx_id_t index, bool type) {
+    GX_WPAR_XF_LOAD(GX_XF_MEMORY_DUALTEX_MTX_0 + (uint32_t)index * 4, type ? 12 : 8);
+    GX_WPAR_F32 = mtx[0][0];
+    GX_WPAR_F32 = mtx[0][1];
+    GX_WPAR_F32 = mtx[0][2];
+    GX_WPAR_F32 = mtx[0][3];
+    GX_WPAR_F32 = mtx[1][0];
+    GX_WPAR_F32 = mtx[1][1];
+    GX_WPAR_F32 = mtx[1][2];
+    GX_WPAR_F32 = mtx[1][3];
+    if(type) {
+        GX_WPAR_F32 = mtx[2][0];
+        GX_WPAR_F32 = mtx[2][1];
+        GX_WPAR_F32 = mtx[2][2];
+        GX_WPAR_F32 = mtx[2][3];
+    }
+}
+
+void gx_set_current_texcoord_matrix(gx_texture_map_t map, gx_mtx_id_t index) {
+    switch(map) {
+        case GX_TEXTURE_MAP_0:
+            gx_state.matrix_index_a &= ~XF_MTXINDX_A_TEX0(0b111111);
+            gx_state.matrix_index_a |= XF_MTXINDX_A_TEX0((uint32_t)index);
+            break;
+        case GX_TEXTURE_MAP_1:
+            gx_state.matrix_index_a &= ~XF_MTXINDX_A_TEX1(0b111111);
+            gx_state.matrix_index_a |= XF_MTXINDX_A_TEX1((uint32_t)index);
+            break;
+        case GX_TEXTURE_MAP_2:
+            gx_state.matrix_index_a &= ~XF_MTXINDX_A_TEX2(0b111111);
+            gx_state.matrix_index_a |= XF_MTXINDX_A_TEX2((uint32_t)index);
+            break;
+        case GX_TEXTURE_MAP_3:
+            gx_state.matrix_index_a &= ~XF_MTXINDX_A_TEX3(0b111111);
+            gx_state.matrix_index_a |= XF_MTXINDX_A_TEX3((uint32_t)index);
+            break;
+        case GX_TEXTURE_MAP_4:
+            gx_state.matrix_index_a &= ~XF_MTXINDX_B_TEX4(0b111111);
+            gx_state.matrix_index_a |= XF_MTXINDX_B_TEX4((uint32_t)index);
+            break;
+        case GX_TEXTURE_MAP_5:
+            gx_state.matrix_index_a &= ~XF_MTXINDX_B_TEX5(0b111111);
+            gx_state.matrix_index_a |= XF_MTXINDX_B_TEX5((uint32_t)index);
+            break;
+        case GX_TEXTURE_MAP_6:
+            gx_state.matrix_index_a &= ~XF_MTXINDX_B_TEX6(0b111111);
+            gx_state.matrix_index_a |= XF_MTXINDX_B_TEX6((uint32_t)index);
+            break;
+        case GX_TEXTURE_MAP_7:
+            gx_state.matrix_index_a &= ~XF_MTXINDX_B_TEX7(0b111111);
+            gx_state.matrix_index_a |= XF_MTXINDX_B_TEX7((uint32_t)index);
+            break;
+    }
+    gx_state.dirty |= GX_DIRTY_MATRIX_INDEX_NEEDS_UPDATE;
+}
+
+void gx_flash_enable_dual_texcoord(bool enable) {
+    GX_WPAR_XF_LOAD(GX_XF_REGISTER_DUALTEXTRANS, enable ? 1 : 0);
+}
+
+/* -------------------TEV Stage Control--------------------- */
+
+void gx_set_tev_stages(int count) {
+    gx_state.genmode &= ~BP_GENMODE_NTEV(0xF);
+    gx_state.genmode |= BP_GENMODE_NTEV(count - 1);
+    gx_state.dirty |= GX_DIRTY_BP_GENMODE_NEEDS_UPDATE;
+}
+
+void gx_initialize_tev_stage(gx_tev_stage_t* tev) {
+    // Clear registers to zero
+    tev->color_control = 0;
+    tev->alpha_control = 0;
+
+    // Color operation
+    gx_set_tev_stage_color_input(tev, GX_TEV_IO_ZERO, GX_TEV_IO_ZERO, GX_TEV_IO_ZERO, GX_TEV_IO_RASTERIZER);
+    gx_set_tev_stage_color_output(tev, GX_TEV_IO_PREVIOUS, true);
+    gx_set_tev_stage_color_biasing(tev, false, GX_TEV_BIAS_0, GX_TEV_SCALE_1);
+
+    // Alpha Operation
+    gx_set_tev_stage_alpha_input(tev, GX_TEV_IO_ZERO, GX_TEV_IO_ZERO, GX_TEV_IO_ZERO, GX_TEV_IO_RASTERIZER);
+    gx_set_tev_stage_alpha_output(tev, GX_TEV_IO_PREVIOUS, true);
+    gx_set_tev_stage_alpha_biasing(tev, false, GX_TEV_BIAS_0, GX_TEV_SCALE_1);
+}
+
+void gx_flash_tev_stage(gx_tev_stage_id id, const gx_tev_stage_t* tev) {
+    // 2 pairs of color environment registers per TEV.
+    uint32_t color_env_rid = GX_BP_REGISTERS_TEV0_COLOR_ENV + ((id * 2) << 24);
+    uint32_t alpha_env_rid = GX_BP_REGISTERS_TEV0_ALPHA_ENV + ((id * 2) << 24);
+    GX_WPAR_BP_LOAD(color_env_rid | tev->color_control);
+    GX_WPAR_BP_LOAD(alpha_env_rid | tev->alpha_control);
+}
+
+void gx_set_tev_stage_color_input(gx_tev_stage_t* tev, gx_tev_io_t a, gx_tev_io_t b, gx_tev_io_t c, gx_tev_io_t d) {
+    tev->color_control &= ~(BP_TEV_COLOR_ENV_SELECT_A(0xF) | BP_TEV_COLOR_ENV_SELECT_B(0xF) | BP_TEV_COLOR_ENV_SELECT_C(0xF) | BP_TEV_COLOR_ENV_SELECT_D(0xF));
+    tev->color_control |= BP_TEV_COLOR_ENV_SELECT_A(a) | BP_TEV_COLOR_ENV_SELECT_B(b) | BP_TEV_COLOR_ENV_SELECT_C(c) | BP_TEV_COLOR_ENV_SELECT_D(d);
+}
+
+void gx_set_tev_stage_alpha_input(gx_tev_stage_t* tev, gx_tev_io_t a, gx_tev_io_t b, gx_tev_io_t c, gx_tev_io_t d) {
+    // There very close. But saddly, not exact. Constant enum is different
+    a = a == GX_TEV_IO_CONSTANT ? 6 : (a >> 1);
+    b = b == GX_TEV_IO_CONSTANT ? 6 : (b >> 1);
+    c = c == GX_TEV_IO_CONSTANT ? 6 : (c >> 1);
+    d = d == GX_TEV_IO_CONSTANT ? 6 : (d >> 1);
+
+    tev->alpha_control &= ~(BP_TEV_ALPHA_ENV_SELECT_A(0x7) | BP_TEV_ALPHA_ENV_SELECT_B(0x7) | BP_TEV_ALPHA_ENV_SELECT_C(0x7) | BP_TEV_ALPHA_ENV_SELECT_D(0x7));
+    tev->alpha_control |= BP_TEV_ALPHA_ENV_SELECT_A(a) | BP_TEV_ALPHA_ENV_SELECT_B(b) | BP_TEV_ALPHA_ENV_SELECT_C(c) | BP_TEV_ALPHA_ENV_SELECT_D(d);
+}
+
+void gx_set_tev_stage_color_output(gx_tev_stage_t* tev, gx_tev_io_t out, bool clamp) {
+    tev->color_control &= ~(BP_TEV_COLOR_ENV_CLAMP | BP_TEV_COLOR_ENV_DEST(0xF));
+    tev->color_control |= BP_TEV_COLOR_ENV_DEST(out) | (clamp ? BP_TEV_COLOR_ENV_CLAMP : 0);
+}
+
+void gx_set_tev_stage_alpha_output(gx_tev_stage_t* tev, gx_tev_io_t out, bool clamp) {
+    out = out == GX_TEV_IO_CONSTANT ? 6 : (out >> 1);
+
+    tev->alpha_control &= ~(BP_TEV_ALPHA_ENV_CLAMP | BP_TEV_ALPHA_ENV_DEST(0x7));
+    tev->alpha_control |= BP_TEV_ALPHA_ENV_DEST(out) | (clamp ? BP_TEV_ALPHA_ENV_CLAMP : 0);
+}
+
+void gx_set_tev_stage_color_biasing(gx_tev_stage_t* tev, bool subtract, gx_tev_bias_t bias, gx_tev_scale_t scale) {
+    tev->color_control &= ~(BP_TEV_COLOR_ENV_BIAS(0b11) | BP_TEV_COLOR_ENV_SHIFT(0b11));
+    tev->color_control |= (subtract ? BP_TEV_COLOR_ENV_SUB : 0) | BP_TEV_COLOR_ENV_BIAS(bias) | BP_TEV_COLOR_ENV_SHIFT(scale);
+}
+
+void gx_set_tev_stage_color_comparison(gx_tev_stage_t* tev, gx_tev_compare_t comparison) {
+    // So, biasing mode 3 is comparison mode. Fun assignments...
+    tev->color_control &= ~BP_TEV_COLOR_ENV_COMPARISON(0x7);
+    tev->color_control |= BP_TEV_COLOR_ENV_COMPARISON(comparison) | BP_TEV_COLOR_ENV_BIAS(3);
+}
+
+void gx_set_tev_stage_alpha_biasing(gx_tev_stage_t* tev, bool subtract, gx_tev_bias_t bias, gx_tev_scale_t scale) {
+    tev->alpha_control &= ~(BP_TEV_ALPHA_ENV_SUB | BP_TEV_ALPHA_ENV_BIAS(0b11) | BP_TEV_ALPHA_ENV_SHIFT(0b11));
+    tev->alpha_control |= (subtract ? BP_TEV_ALPHA_ENV_SUB : 0) | BP_TEV_ALPHA_ENV_BIAS(bias) | BP_TEV_ALPHA_ENV_SHIFT(scale);
+}
+
+void gx_set_tev_stage_alpha_comparison(gx_tev_stage_t* tev, gx_tev_compare_t comparison) {
+    // So, biasing mode 3 is comparison mode. Fun assignments...
+    tev->alpha_control &= ~BP_TEV_ALPHA_ENV_COMPARISON(0x7);
+    tev->alpha_control |= BP_TEV_ALPHA_ENV_COMPARISON(comparison) | BP_TEV_ALPHA_ENV_BIAS(3);
+}
+
+void gx_flash_tev_register_color(gx_tev_io_t reg, int r, int g, int b, int a) {
+    GX_WPAR_BP_LOAD((GX_BP_REGISTERS_TEV_REGISTERL_0 + (reg << 24)) |
+        BP_TEV_REGISTERL_R(r) | BP_TEV_REGISTERL_A(a)
+    );
+    GX_WPAR_BP_LOAD((GX_BP_REGISTERS_TEV_REGISTERH_0 + (reg << 24)) |
+        BP_TEV_REGISTERH_B(b) | BP_TEV_REGISTERH_G(g)
+    );
 }

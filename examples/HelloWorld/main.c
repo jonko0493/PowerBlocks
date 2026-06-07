@@ -1,24 +1,22 @@
 #include "powerblocks/core/system/system.h"
-#include "powerblocks/core/system/ios.h"
-#include "powerblocks/core/system/ios_settings.h"
+#include "powerblocks/core/ios/ios.h"
+#include "powerblocks/core/ios/ios_settings.h"
 
 #include "powerblocks/core/graphics/video.h"
-#include "powerblocks/core/graphics/gx.h"
 
 #include "powerblocks/core/utils/fonts.h"
 #include "powerblocks/core/utils/console.h"
 
-#include "FreeRTOSConfig.h"
-#include "FreeRTOS.h"
-#include "task.h"
-
 #include <stdio.h>
-#include <stdlib.h>
-#include <stdalign.h>
 #include <math.h>
 
-framebuffer_t frame_buffer __attribute__((aligned(512)));
-uint8_t fifo_buffer[4096] __attribute__((aligned(32)));
+framebuffer_t frame_buffer ALIGN(512);
+
+void retrace_callback() {
+    // Make it so we can see the framebuffer changes
+    system_flush_dcache(&frame_buffer, sizeof(frame_buffer));
+}
+
 
 int main() {
     // Initialize IOS. Must be done first as many thing use it
@@ -32,11 +30,14 @@ int main() {
     console_initialize(&frame_buffer, &fonts_ibm_iso_8x16);
     video_set_framebuffer(&frame_buffer);
 
-    // Create Blue Background
-    framebuffer_fill_rgba(&frame_buffer, 0x7ee5f2ff, vec2i_new(0,0), vec2i_new(VIDEO_WIDTH, VIDEO_HEIGHT));
+    // Set the retrace callback to flush the framebuffer before drawing.
+    video_set_retrace_callback(retrace_callback);
 
-    // Back Text To Black, Blue Background
-    console_set_text_color(0x000000FF, 0x7ee5f2ff);
+    // Create Black Background
+    framebuffer_fill_rgba(&frame_buffer, 0x000000FF, vec2i_new(0,0), vec2i_new(VIDEO_WIDTH, VIDEO_HEIGHT));
+
+    // Back Text To White with a Black Background
+    console_set_text_color(0xFFFFFFFF, 0x000000FF);
 
     // print super cool hello message
     printf("\n\n\n");
@@ -62,9 +63,6 @@ int main() {
         console_set_cursor(
             vec2i_add(console_cursor_position, vec2i_new(0, -console_font->character_size.y))
         );
-
-        // Make it so we can see the framebuffer changes
-        system_flush_dcache(&frame_buffer, sizeof(frame_buffer));
 
         // Wait for vsync
         video_wait_vsync();

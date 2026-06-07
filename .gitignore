@@ -4,9 +4,21 @@ toolchain/lib
 picolibc/include
 picolibc/lib
 
+# Ignore build folder
+build/
+
 # Ignore Example Program build folders
 examples/HelloWorld/build
 examples/Teapot/build
+examples/wiimote/build
+examples/Rust/build
+examples/FileSystem/build
+
+# Ignore VS Code Stuff
 .vscode/settings.json
 .vscode/settings.json
 /.vscode
+
+# Ignore Obsidian when editing markdown
+docs/.obsidian
+__pycache__/

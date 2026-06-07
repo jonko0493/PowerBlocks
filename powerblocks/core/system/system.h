@@ -12,6 +12,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stddef.h>
 
 #include "powerblocks/core/system/syscall.h"
 
@@ -64,7 +65,7 @@
  *  Converts a cached address into a uncached virtual address.
  *  This is done by setting the MSB nibble.
  */
-#define SYSTEM_MEM_UNCACHED(address) (((uint32_t)(address) & 0x0FFFFFFF) | 0xC0000000)
+#define SYSTEM_MEM_UNCACHED(address) (((uint32_t)(address) & 0x1FFFFFFF) | 0xC0000000)
 
  /** @def SYSTEM_MEM_CACHED
  *  @brief Convert a memory address into a cached virtual address.
@@ -72,7 +73,7 @@
  *  Converts a cached address into a cached virtual address.
  *  This is done by setting the MSB nibble.
  */
-#define SYSTEM_MEM_CACHED(address) (((uint32_t)(address) & 0x0FFFFFFF) | 0x80000000)
+#define SYSTEM_MEM_CACHED(address) (((uint32_t)(address) & 0x1FFFFFFF) | 0x80000000)
 
  /** @def SYSTEM_MEM_PHYSICAL
  *  @brief Convert a memory address into a physical address.
@@ -80,7 +81,35 @@
  *  Converts a cached address into a physical address.
  *  This is done by setting the MSB nibble.
  */
-#define SYSTEM_MEM_PHYSICAL(address) ((uint32_t)(address) & 0x0FFFFFFF)
+#define SYSTEM_MEM_PHYSICAL(address) ((uint32_t)(address) & 0x1FFFFFFF)
+
+ /** @struct system_argv_t
+ *  @brief Command line arguments passed to us from launcher
+ */
+typedef struct {
+    int magic; // Supposed to be 0x5f617267, checked by system init
+    const char* command_line;
+    int command_line_length;
+    int argc;
+    char **argv;
+    char **end_argv;
+} system_argv_t;
+
+extern system_argv_t system_argv;
+
+ /** @def PACKED
+ *  @brief Pack a data structure.
+ *
+ *  Attribute to make it so fields in a data structure are not alignment padded.
+ */
+#define PACKED __attribute__((packed))
+
+ /** @def SYSTEM_MEM2_FUNC
+ *  @brief Tag a function to be placed in mem2.
+ *
+ *  Makes it so this code will be in mem2.
+ */
+#define MEM2 __attribute__((section(".mem2")))
 
  /** @def SYSTEM_MAIN_STACK_SIZE
  *  @brief Size of the stack of the application main.
@@ -89,7 +118,7 @@
  *  When the system starts, the main() will be a FreeRTOS task
  *  of this stack size.
  */
-#define SYSTEM_MAIN_STACK_SIZE (1024*1024*4) // 4 MB
+#define SYSTEM_MAIN_STACK_SIZE (1024*16) // 16 KB
 
  /** @def SYSTEM_GET_MSR
  *  @brief Gets the value of the MSR register
@@ -189,7 +218,21 @@
  */
 #define ASSERT(x) \
     if((x) == 0) { \
-        SYSCALL_ASSERT(__LINE__, __FILE__); \
+        SYSCALL_ASSERT("ASSERTION FAILED", __LINE__, __FILE__); \
+    }
+
+ /** @def ASSERT_OUT_OF_MEMORY
+ * @brief Triggers a out of memory assertion if the condition fails.
+ * 
+ * Normally out of memory errors are propagated up as a return value.
+ * But in the event a driver, or some critical system fails to allocate the heap
+ * at runtime, and must crash, then this assertion can be used.
+ * 
+ * Games can also use it if they find a memory condition fatal for whatever reason.
+ */
+#define ASSERT_OUT_OF_MEMORY(x) \
+    if((x) == 0) { \
+        SYSCALL_ASSERT("OUT OF MEMORY", __LINE__, __FILE__); \
     }
 
  /** @def ALIGN
@@ -239,6 +282,8 @@ extern uint64_t system_get_time_base_int();
  * 
  * No interrupts version.
  * 
+ * Recommend using FreeRTOS vTaskDelay instead.
+ * 
  * @param ticks Number of ticks to wait for
  */
 extern void system_delay_int(uint64_t ticks);
@@ -252,7 +297,7 @@ extern void system_delay_int(uint64_t ticks);
  * Does not call sync after, so right after this the cache
  * may not be done flushing.
  */
-extern void system_flush_dcache(void* data, uint32_t size);
+extern void system_flush_dcache(const void* data, uint32_t size);
 
 /**
  * @brief Invalidates data cache in a range
@@ -300,5 +345,23 @@ extern void system_aligned_free(void* ptr);
  * so this all happens before the C program starts running.
  */
 extern void system_initialize();
+
+/**
+ * @brief Looks in the argv command line for a specific boot path.
+ *
+ * When mounting a file system, this can be used to change the directory
+ * into the one the program was launched from if the file system is the one
+ * its running from.
+ * 
+ * For example passing a device of "sd" into device, it will fill buffer
+ * with the `/apps/my_app/` path if the game was launched from the sd.
+ * If not it will return `/` into it.
+ * 
+ * @param device Boot device
+ * @param buffer Outputted path buffer
+ * @param length Length of path buffer.
+ * 
+ */
+extern void system_get_boot_path(const char* device, char* buffer, size_t length);
 
 #include <stdint.h>

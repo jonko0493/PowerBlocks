@@ -15,5 +15,7 @@ target_link_libraries(
 add_library(PowerBlocks::Common ALIAS PowerBlocksCommon)
 
 set(FREERTOS_PATH ${CMAKE_CURRENT_LIST_DIR}/third_party/freertos)
+set(FATFS_PATH ${CMAKE_CURRENT_LIST_DIR}/third_party/fatfs)
+set(QRCODEGEN_PATH ${CMAKE_CURRENT_LIST_DIR}/third_party/qrcodegen)
 
 add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/powerblocks" "${CMAKE_BINARY_DIR}/powerblocks")

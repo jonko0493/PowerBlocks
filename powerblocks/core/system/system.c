@@ -16,8 +16,12 @@
 
 #include <stdbool.h>
 #include <stdlib.h>
+#include <string.h>
+
+#include "utils/log.h"
 
 #include "exceptions.h"
+#include "gpio.h"
 
 // Main of the application of the user.
 extern void main();
@@ -54,6 +58,22 @@ void system_initialize() {
     uint32_t level;
     SYSTEM_DISABLE_ISR(level);
 
+    // Arguments
+    // Check magic
+    //if(argv->magic == 0x5f617267) {
+        //memcpy(&system_argv, argv, sizeof(system_argv_t));
+    //} else {
+        // Empty one
+    //    system_argv.magic = 0x5f617267;
+    //    system_argv.command_line = NULL;
+    //    system_argv.command_line_length = 0;
+    //    system_argv.argc = 0;
+    //    system_argv.argv = NULL;
+    //    system_argv.end_argv = NULL;
+    //}
+
+    log_initialize();
+
     // Install exception handlers
     exceptions_install_vector();
 
@@ -62,4 +82,62 @@ void system_initialize() {
     vTaskStartScheduler();
 
     // We do not expect execution to return here.
+}
+
+void system_get_boot_path(const char* device, char* buffer, size_t length) {
+    if(buffer == NULL || length < 1)
+        return;
+    
+    // Default path
+    if(length > 1) {
+        buffer[0] = '/';
+        buffer[1] = 0;
+    } else {
+        buffer[0] = 0;
+        return;
+    }
+
+    // If no command line, then exit
+    if(system_argv.command_line == NULL) {
+        return;
+    }
+
+    const char* cmd = system_argv.command_line;
+
+    // Find colon separating device from path
+    const char *colon = strchr(cmd, ':');
+    if(!colon)
+        return; // Malformed, exit
+    
+    size_t devlen = colon - cmd;
+    if(devlen == 0)
+        return;
+
+    char boot_device[16];
+    if(devlen >= sizeof(boot_device))
+        devlen = sizeof(boot_device) - 1;
+    
+    memcpy(boot_device, cmd, devlen);
+    boot_device[devlen] = 0;
+
+    // Compare device
+    if(strcmp(boot_device, device) != 0) {
+        return; // Wrong device, leave default "/"
+    }
+
+    // Now extract path AFTER the colon
+    const char* path_start = colon + 1; // skip the ':'
+
+    // Find last slash (to remove filename)
+    const char* last_slash = strrchr(path_start, '/');
+    if(!last_slash)
+        return; // No slash, malformed
+    
+    size_t dir_len = (last_slash - path_start) + 1; // include trailing slash
+    if(dir_len >= length)
+        dir_len = length - 1;
+
+    // Copy only the path portion, skipping "sd:" or "usb:"
+    memcpy(buffer, path_start, dir_len);
+    buffer[dir_len] = 0;
 }
